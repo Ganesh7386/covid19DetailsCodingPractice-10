@@ -80,8 +80,6 @@ const authorizeWithJWTToken = (req, res, next) => {
         if (error) {
           res.status(401).send("token found , but did'nt match with user");
         } else {
-          const { username } = payload;
-          req.gotUsernameFromPayload = username;
           next();
         }
       });
@@ -96,7 +94,67 @@ app.post("/login/", authenticateUser, sendJWTToken, (req, res) => {
   res.status(200).send(tokenObj);
 });
 
-app.get("/states/", authorizeWithJWTToken, (req, res) => {
-  const gotUsernameFromPayload = req.gotUsernameFromPayload;
-  res.send({ username: gotUsernameFromPayload, response: "ok" });
+app.get("/states/", authorizeWithJWTToken, async (req, res) => {
+  const gettingAllStatesQuery = `select * from state`;
+  const allStatesList = await db.all(gettingAllStatesQuery);
+  res.send(allStatesList);
+});
+
+app.get("/states/:id/", authorizeWithJWTToken, async (req, res) => {
+  const { id } = req.params;
+  const gettingSpecifiedStateWithIdQuery = `select * from state where state_id = ${id}`;
+  const requestedStateDetails = await db.get(gettingSpecifiedStateWithIdQuery);
+  res.send(requestedStateDetails);
+});
+
+app.post("/districts/", authorizeWithJWTToken, async (req, res) => {
+  const { districtName, stateId, cases, cured, active, deaths } = req.body;
+  const addingDistrictQuery = `INSERT INTO district(district_name , state_id , cases , cured , active , deaths)
+    VALUES ('${districtName}' , ${stateId} , ${cases} , ${cured} , ${active} , ${deaths})`;
+  const addingStatePromiseObj = await db.run(addingDistrictQuery);
+  console.log(addingStatePromiseObj);
+  const lastId = addingStatePromiseObj.lastId;
+  res.send(lastId);
+});
+
+app.get("/districts/:id/", authorizeWithJWTToken, async (req, res) => {
+  const { id } = req.params;
+  const gettingSpecifiedDistrictIdQuery = `SELECT * FROM district WHERE district_id = ${id}`;
+  const districtDetails = await db.get(gettingSpecifiedDistrictIdQuery);
+  res.send(districtDetails);
+});
+
+app.put("/districts/:id/", async (req, res) => {
+  const { id } = req.params;
+  const { districtName, stateId, cases, cured, active, deaths } = req.body;
+  const updatingDistrictQuery = `UPDATE DISTRICT 
+    SET district_name = '${districtName}' , state_id = ${stateId} ,cases = ${cases} , cured = ${cured} , active = ${active} , deaths = ${deaths}
+    WHERE district_id = ${id} `;
+  const updatingDistrictPromise = await db.run(updatingDistrictQuery);
+  console.log(updatingDistrictPromise);
+  res.send("Updated successfully");
+});
+
+app.delete("/districts/:id/", async (req, res) => {
+  const { id } = req.params;
+  const deletingDistrictQuery = `DELETE FROM DISTRICT WHERE district_id = ${id}`;
+  const deletingDistrictPromise = await db.run(deletingDistrictQuery);
+  console.log(deletingDistrictPromise);
+  res.send("deleted successfully");
+});
+
+app.get("/states/:stateId/stats/", async (req, res) => {
+  try {
+    const { stateId } = req.params;
+    const gettingAllStatsQuery = `SELECT sum(cases) as totalCases , 
+    sum(cured) as totalCured , 
+    sum(active) as totalActive , 
+    sum(deaths) as totalDeaths
+    FROM DISTRICT WHERE state_id = ${stateId}`;
+    const statsOfState = await db.get(gettingAllStatsQuery);
+    console.log(statsOfState);
+    res.send(statsOfState);
+  } catch (e) {
+    console.log(e.message);
+  }
 });
